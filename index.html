@@ -18,12 +18,13 @@
     const entityTypeId = placement.options.entityTypeId;
     const entityId = placement.options.entityId;
 
+    // Загружаем данные сделки/контакта
     const entity = await BX24.callMethod(
         "crm.item.get",
         { entityTypeId, id: entityId }
     );
 
-    // Укажи код поля, где хранится город
+    // ТВОЁ ПОЛЕ С ГОРОДОМ
     const CITY_FIELD = "UF_CRM_1774629968145";
 
     const city = entity?.item?.[CITY_FIELD];
@@ -33,22 +34,29 @@
         return;
     }
 
-    const geo = await fetch(`https://geocode.maps.co/search?q=${encodeURIComponent(city)}`).then(r => r.json());
-    if (!geo || !geo[0]) {
-        document.getElementById("client-time").innerText = "Не удалось определить город";
-        return;
-    }
+    // --- 1. Определяем координаты города через Яндекс Геокодер ---
+    const GEOCODER_KEY = "511b6e5f-1d65-400f-9805-3344c6ea8dff";
 
-    const lat = geo[0].lat;
-    const lon = geo[0].lon;
+    const geoUrl =
+        `https://geocode-maps.yandex.ru/1.x/?apikey=${GEOCODER_KEY}&format=json&geocode=${encodeURIComponent(city)}`;
 
-    const tz = await fetch(`https://timeapi.io/api/TimeZone/coordinate?latitude=${lat}&longitude=${lon}`).then(r => r.json());
-    if (!tz || !tz.currentLocalTime) {
+    const geo = await fetch(geoUrl).then(r => r.json());
+
+    const pos = geo.response.GeoObjectCollection.featureMember[0].GeoObject.Point.pos.split(" ");
+    const lon = pos[0];
+    const lat = pos[1];
+
+    // --- 2. Получаем локальное время через Open-Meteo (БЕСПЛАТНО, БЕЗ КЛЮЧЕЙ) ---
+    const tzUrl = `https://api.open-meteo.com/v1/timezone?latitude=${lat}&longitude=${lon}`;
+
+    const tz = await fetch(tzUrl).then(r => r.json());
+
+    if (!tz?.datetime) {
         document.getElementById("client-time").innerText = "Ошибка определения времени";
         return;
     }
 
-    let current = new Date(tz.currentLocalTime);
+    let current = new Date(tz.datetime);
 
     function updateClock() {
         current = new Date(current.getTime() + 1000);
