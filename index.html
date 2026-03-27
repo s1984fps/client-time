@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Client Time Widget</title>
+<script src="https://api.bitrix24.com/api/v1/"></script>
+</head>
+<body style="font-family:Arial;padding:10px;">
+    <div id="client-time" style="font-size:18px;font-weight:bold;">
+        Загрузка времени клиента...
+    </div>
+
+<script>
+(async () => {
+    await BX24.init();
+
+    const placement = BX24.placement.info();
+    const entityTypeId = placement.options.entityTypeId;
+    const entityId = placement.options.entityId;
+
+    const entity = await BX24.callMethod(
+        "crm.item.get",
+        { entityTypeId, id: entityId }
+    );
+
+    // Укажи код поля, где хранится город
+    const CITY_FIELD = "UF_CRM_1774629968145";
+
+    const city = entity?.item?.[CITY_FIELD];
+
+    if (!city) {
+        document.getElementById("client-time").innerText = "Город не указан";
+        return;
+    }
+
+    const geo = await fetch(`https://geocode.maps.co/search?q=${encodeURIComponent(city)}`).then(r => r.json());
+    if (!geo || !geo[0]) {
+        document.getElementById("client-time").innerText = "Не удалось определить город";
+        return;
+    }
+
+    const lat = geo[0].lat;
+    const lon = geo[0].lon;
+
+    const tz = await fetch(`https://timeapi.io/api/TimeZone/coordinate?latitude=${lat}&longitude=${lon}`).then(r => r.json());
+    if (!tz || !tz.currentLocalTime) {
+        document.getElementById("client-time").innerText = "Ошибка определения времени";
+        return;
+    }
+
+    let current = new Date(tz.currentLocalTime);
+
+    function updateClock() {
+        current = new Date(current.getTime() + 1000);
+        document.getElementById("client-time").innerText =
+            `Текущее время (${city}): ` + current.toLocaleTimeString();
+    }
+
+    updateClock();
+    setInterval(updateClock, 1000);
+})();
+</script>
+</body>
+</html>
